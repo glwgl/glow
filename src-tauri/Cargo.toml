@@ -1,13 +1,13 @@
 [package]
 name = "glow-app"
-version = "0.2.0"
+version = "0.2.3"
 edition = "2021"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon", "image-ico", "image-png"] }
 serde = { version = "1", features = ["derive"] }
 battery = "0.7"
 
@@ -19,10 +19,18 @@ windows = { version = "0.58", features = [
   "Media_Control",
   "Storage_Streams",
   "Devices_Radios",
+  "Devices_Bluetooth",
+  "Devices_Enumeration",
+  "Networking_Connectivity",
+  "Win32_Graphics_Dwm",
+  "Win32_Graphics_Gdi",
   "Win32_Foundation",
   "Win32_Media_Audio",
   "Win32_Media_Audio_Endpoints",
   "Win32_System_Com",
   "Win32_System_Com_StructuredStorage",
   "Win32_UI_Shell_PropertiesSystem",
+  "Win32_UI_Shell",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_WindowsAndMessaging",
 ] }

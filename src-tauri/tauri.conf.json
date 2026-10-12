@@ -1,6 +1,6 @@
 {
   "productName": "Glow",
-  "version": "0.2.0",
+  "version": "0.2.3",
   "identifier": "app.glow.island",
   "build": {
     "frontendDist": "../src"
@@ -11,8 +11,8 @@
       {
         "label": "main",
         "title": "Glow",
-        "width": 400,
-        "height": 70,
+        "width": 700,
+        "height": 520,
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,

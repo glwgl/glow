@@ -45,12 +45,32 @@ pub mod media {
         let s = session()?;
         let p = s.TryGetMediaPropertiesAsync()?.get()?;
         let t = s.GetTimelineProperties()?;
+        let info = s.GetPlaybackInfo()?;
+        let playing = info.PlaybackStatus()? == PS::Playing;
+        let duration = t.EndTime()?.Duration as f64 / 1e7;
+        let mut position = t.Position()?.Duration as f64 / 1e7;
+        // Плеер сообщает позицию редко. Достраиваем её до текущего момента:
+        // позиция + время, прошедшее с последнего обновления (иначе текст «дёргается»)
+        if playing {
+            if let Ok(last) = t.LastUpdatedTime() {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| (d.as_nanos() / 100) as i64)
+                    .unwrap_or(0) + 116_444_736_000_000_000i64;
+                let elapsed = (now - last.UniversalTime) as f64 / 1e7;
+                if elapsed > 0.0 && elapsed < 43_200.0 {
+                    let rate = info.PlaybackRate().ok().and_then(|r| r.Value().ok()).unwrap_or(1.0);
+                    position += elapsed * rate;
+                }
+            }
+            if duration > 0.0 && position > duration { position = duration; }
+        }
         Ok(Track {
             title: p.Title()?.to_string(),
             artist: p.Artist()?.to_string(),
-            position: t.Position()?.Duration as f64 / 1e7,
-            duration: t.EndTime()?.Duration as f64 / 1e7,
-            playing: s.GetPlaybackInfo()?.PlaybackStatus()? == PS::Playing,
+            position,
+            duration,
+            playing,
         })
     }
 
@@ -166,23 +186,157 @@ pub mod volume {
 }
 
 // ---------- Яркость (экраны ноутбуков, через WMI) ----------
+// Для установки держим один PowerShell открытым и шлём ему команды: так ползунок
+// двигает яркость сразу, без запуска нового процесса на каждое движение.
 pub mod brightness {
     use super::*;
-    fn ps(script: &str) -> Option<String> {
+    use std::io::Write;
+    use std::process::{Child, Stdio};
+    static PS: Mutex<Option<Child>> = Mutex::new(None);
+
+    pub fn get() -> Option<u32> {
         let o = Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script])
+            .args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command",
+                   "(Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness | Select-Object -First 1).CurrentBrightness"])
             .creation_flags(NO_WINDOW)
             .output().ok()?;
         if !o.status.success() { return None; }
-        Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+        String::from_utf8_lossy(&o.stdout).trim().parse().ok()
     }
-    pub fn get() -> Option<u32> {
-        ps("(Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness | Select-Object -First 1).CurrentBrightness")?
-            .parse().ok()
-    }
+
     pub fn set(v: u32) -> bool {
-        let v = v.min(100);
-        ps(&format!("Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightnessMethods | Invoke-CimMethod -MethodName WmiSetBrightness -Arguments @{{Timeout=1;Brightness={}}} | Out-Null", v)).is_some()
+        let Ok(mut g) = PS.lock() else { return false };
+        let dead = match g.as_mut() {
+            Some(c) => c.try_wait().map(|s| s.is_some()).unwrap_or(true),
+            None => true,
+        };
+        if dead {
+            let child = Command::new("powershell")
+                .args(["-NoProfile", "-NoLogo", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", "-"])
+                .stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::null())
+                .creation_flags(NO_WINDOW)
+                .spawn();
+            match child {
+                Ok(mut c) => {
+                    if let Some(i) = c.stdin.as_mut() {
+                        let _ = writeln!(i, "$m = Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightnessMethods");
+                    }
+                    *g = Some(c);
+                }
+                Err(_) => return false,
+            }
+        }
+        if let Some(i) = g.as_mut().and_then(|c| c.stdin.as_mut()) {
+            return writeln!(i, "Invoke-CimMethod -InputObject $m -MethodName WmiSetBrightness -Arguments @{{Timeout=1;Brightness={}}} | Out-Null", v.min(100))
+                .and_then(|_| i.flush()).is_ok();
+        }
+        false
+    }
+}
+
+// ---------- Имена: к какому Wi-Fi и каким Bluetooth-устройствам подключён компьютер ----------
+pub mod names {
+    use windows::Devices::Bluetooth::{BluetoothConnectionStatus, BluetoothDevice, BluetoothLEDevice};
+    use windows::Devices::Enumeration::DeviceInformation;
+    use windows::Networking::Connectivity::{NetworkConnectivityLevel, NetworkInformation};
+
+    pub fn wifi() -> Option<String> {
+        let list = NetworkInformation::GetConnectionProfiles().ok()?;
+        for p in list {
+            if !p.IsWlanConnectionProfile().unwrap_or(false) { continue; }
+            let lvl = p.GetNetworkConnectivityLevel().unwrap_or(NetworkConnectivityLevel::None);
+            if lvl == NetworkConnectivityLevel::None { continue; }
+            if let Ok(n) = p.ProfileName() {
+                let n = n.to_string();
+                if !n.is_empty() { return Some(n); }
+            }
+        }
+        None
+    }
+
+    pub fn bluetooth() -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        let sels = [
+            BluetoothDevice::GetDeviceSelectorFromConnectionStatus(BluetoothConnectionStatus::Connected),
+            BluetoothLEDevice::GetDeviceSelectorFromConnectionStatus(BluetoothConnectionStatus::Connected),
+        ];
+        for sel in sels {
+            let Ok(sel) = sel else { continue };
+            let Ok(op) = DeviceInformation::FindAllAsyncAqsFilter(&sel) else { continue };
+            let Ok(found) = op.get() else { continue };
+            for d in found {
+                if let Ok(n) = d.Name() {
+                    let n = n.to_string();
+                    if !n.is_empty() && !out.contains(&n) { out.push(n); }
+                }
+            }
+        }
+        out
+    }
+}
+
+// ---------- Размытие фона под островом (DWM), только внутри скруглённой области ----------
+pub mod blur {
+    use windows::Win32::Foundation::{BOOL, HWND};
+    use windows::Win32::Graphics::Dwm::{DwmEnableBlurBehindWindow, DWM_BB_BLURREGION, DWM_BB_ENABLE, DWM_BLURBEHIND};
+    use windows::Win32::Graphics::Gdi::{CreateRoundRectRgn, DeleteObject, HGDIOBJ, HRGN};
+
+    pub fn set(hwnd: isize, x: i32, y: i32, w: i32, h: i32, r: i32, on: bool) {
+        unsafe {
+            let hw = HWND(hwnd as *mut core::ffi::c_void);
+            let rgn = if on && w > 0 && h > 0 { CreateRoundRectRgn(x, y, x + w, y + h, r * 2, r * 2) } else { HRGN(core::ptr::null_mut()) };
+            let bb = DWM_BLURBEHIND {
+                dwFlags: DWM_BB_ENABLE | DWM_BB_BLURREGION,
+                fEnable: BOOL(if on && !rgn.is_invalid() { 1 } else { 0 }),
+                hRgnBlur: rgn,
+                fTransitionOnMaximized: BOOL(0),
+            };
+            let _ = DwmEnableBlurBehindWindow(hw, &bb);
+            if !rgn.is_invalid() { let _ = DeleteObject(HGDIOBJ(rgn.0)); }
+        }
+    }
+}
+
+// ---------- Мышь, клавиши, полноэкранные приложения ----------
+pub mod input {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        GetAsyncKeyState, RegisterHotKey, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, VK_LBUTTON, VK_RBUTTON,
+    };
+    use windows::Win32::UI::Shell::{
+        SHQueryUserNotificationState, QUNS_BUSY, QUNS_PRESENTATION_MODE, QUNS_RUNNING_D3D_FULL_SCREEN,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{GetMessageW, MSG, WM_HOTKEY};
+
+    // Зажата ли левая или правая кнопка мыши
+    pub fn button_down() -> bool {
+        unsafe {
+            (GetAsyncKeyState(VK_LBUTTON.0 as i32) as u16 & 0x8000) != 0
+                || (GetAsyncKeyState(VK_RBUTTON.0 as i32) as u16 & 0x8000) != 0
+        }
+    }
+
+    // Идёт ли полноэкранное приложение (игра, видео на весь экран, презентация)
+    pub fn fullscreen_app() -> bool {
+        unsafe {
+            match SHQueryUserNotificationState() {
+                Ok(s) => s == QUNS_BUSY || s == QUNS_RUNNING_D3D_FULL_SCREEN || s == QUNS_PRESENTATION_MODE,
+                Err(_) => false,
+            }
+        }
+    }
+
+    // Горячая клавиша Ctrl+Alt+G. Цикл сообщений живёт в своём потоке.
+    pub fn hotkey_loop(on_press: impl Fn()) {
+        unsafe {
+            if RegisterHotKey(HWND(core::ptr::null_mut()), 1, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 0x47).is_err() {
+                return;
+            }
+            let mut msg: MSG = core::mem::zeroed();
+            while GetMessageW(&mut msg, HWND(core::ptr::null_mut()), 0, 0).as_bool() {
+                if msg.message == WM_HOTKEY { on_press(); }
+            }
+        }
     }
 }
 
