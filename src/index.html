@@ -82,6 +82,11 @@ button svg{width:20px;height:20px;fill:currentColor}
 .qt{padding:0 5px}
 .qt span{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #island{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+/* размытый снимок фона под островом: лежит под содержимым, поверх него полупрозрачное стекло */
+#island.bb{background:transparent}
+#bgb{position:absolute;z-index:-1;pointer-events:none;opacity:0;transition:opacity .35s;background-size:100% 100%;background-repeat:no-repeat;filter:blur(10px) saturate(1.3)}
+#bgb.on{opacity:1}
+#bgb::after{content:"";position:absolute;inset:0;background:var(--glass)}
 #glow{will-change:opacity}
 .qt svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .qt:hover{background:rgba(var(--fg),.13)}
@@ -149,7 +154,7 @@ button svg{width:20px;height:20px;fill:currentColor}
 @keyframes spl{to{transform:rotate(-360deg)}}@keyframes spr{to{transform:rotate(360deg)}}
 .ib.nl svg{animation:nl .5s cubic-bezier(.3,1.5,.5,1)}.ib.nr svg{animation:nr .5s cubic-bezier(.3,1.5,.5,1)}
 @keyframes nl{35%{transform:translateX(-6px) scale(.92)}}@keyframes nr{35%{transform:translateX(6px) scale(.92)}}
-.slist{max-height:330px;overflow-y:auto;scrollbar-width:none;padding-bottom:4px}.slist::-webkit-scrollbar{display:none}
+.slist{max-height:440px;overflow-y:auto;scrollbar-width:none;padding-bottom:4px}.slist::-webkit-scrollbar{display:none}
 .slist .opt{margin-bottom:6px;min-height:48px}
 .sw{width:46px;height:28px;border-radius:999px;background:rgba(var(--fg),.2);position:relative;padding:0;flex:none;transition:background .3s}
 .sw::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.3);transition:transform .45s cubic-bezier(.3,1.5,.5,1),background .3s}
@@ -182,6 +187,7 @@ html.noanim *{animation:none!important;transition:none!important}
 <div id="ticker" aria-hidden="true"></div>
 
 <div id="island" aria-label="Остров Glow">
+  <div id="bgb"></div>
   <div class="aura"></div>
   <section class="pane" data-m="0">
     <div id="clk" data-s style="--i:0"></div>
@@ -248,7 +254,7 @@ html.noanim *{animation:none!important;transition:none!important}
 <script>
 const $=s=>document.querySelector(s),isl=$('#island');
 const TAURI=window.__TAURI__,invoke=(c,a)=>TAURI.core.invoke(c,a).catch(()=>null);
-const SZ=[[400,332,38],[400,342,34],[420,286,34],[400,430,32]],CLOSED=[96,10,5];
+const SZ=[[400,332,38],[400,342,34],[420,286,34],[400,540,32]],CLOSED=[96,10,5];
 let mode=0,open=false;
 let note=0; // до какого момента показывается уведомление таймера
 
@@ -266,7 +272,7 @@ function apply(){
   $('#handle').classList.toggle('off',open);
   if(open&&mode===1){loadBatt();loadRadios();loadNames();loadSliders()}
 }
-function setOpen(v){if(open===v)return;open=v;invoke('set_open',{v});apply()}
+function setOpen(v){if(open===v)return;open=v;invoke('set_open',{v});if(v){isl.classList.remove('bb');bgb.classList.remove('on');loadBg()}apply()}
 function setMode(i){mode=(i+4)%4;apply()}
 $('#tabs').querySelectorAll('button').forEach((b,i)=>b.onclick=()=>setMode(i));
 
@@ -282,11 +288,10 @@ addEventListener('keydown',e=>{if(!open)return;if(e.key==='ArrowRight')setMode(m
 // Окно приложения всегда одного размера и пропускает клики, пока остров закрыт (это делает Rust).
 const noteLive=()=>note>performance.now();
 let lastShape='';
-function sendShape(sw,sh,sr){
-  const vis=open||sw>CLOSED[0]+3||sh>CLOSED[1]+3,z=SZ[mode];
-  const sig=vis?Math.round(sw)+','+Math.round(sh)+','+Math.round(sr)+','+open+mode:'off';
+function sendShape(){
+  const z=SZ[mode],sig=open+','+mode+','+z[0]+','+z[1];
   if(sig===lastShape)return;lastShape=sig;
-  invoke('shape',{x:Math.round((innerWidth-sw)/2),y:12,w:Math.round(sw),h:Math.round(sh),r:Math.round(sr),tw:open?z[0]:0,th:open?z[1]:0,on:vis})}
+  invoke('shape',{tw:open?z[0]:0,th:open?z[1]:0})}
 
 // Текущий трек: приходит из системных медиасессий Windows
 
@@ -421,12 +426,20 @@ async function poll(){
   $('#t1').textContent=fmt(DUR)}
 setInterval(poll,500);poll();
 
+// Размытый фон под островом: Rust снимает кусок экрана перед открытием, здесь он размывается
+const bgb=$('#bgb');let bbx=null,bgReq=0;
+function sizeBg(){bgb.style.width=innerWidth+'px';bgb.style.height=innerHeight+'px';bgb.style.top='-12px';bbx=null}
+sizeBg();addEventListener('resize',sizeBg);
+async function loadBg(){const id=++bgReq;if(!S.blur)return;const b=await invoke('get_bg');
+  if(id!==bgReq||!open||!b||!S.blur)return;
+  bgb.style.backgroundImage='url(data:image/bmp;base64,'+b+')';isl.classList.add('bb');bgb.classList.add('on')}
 let last=performance.now();
 function frame(now){
   const dt=Math.min(.033,(now-last)/1000);last=now;
   for(const k in sp){const s=sp[k];s.v+=((s.t-s.x)*K[k]-s.v*D[k])*dt;s.x+=s.v*dt}
   isl.style.width=sp.w.x+'px';isl.style.height=Math.max(4,sp.h.x)+'px';isl.style.borderRadius=Math.max(4,sp.r.x)+'px';
-  sendShape(sp.w.x,Math.max(4,sp.h.x),Math.max(4,sp.r.x));
+  sendShape();
+  {const bx=Math.round(-(innerWidth-sp.w.x)/2*10)/10;if(bx!==bbx){bbx=bx;bgb.style.left=bx+'px'}}
   if(playing&&!scrub){pos=Math.min(DUR,pos+dt)}
   viz(dt);lyr();
   const noteOn=note>performance.now()&&!open;
@@ -478,11 +491,11 @@ const QT=[['wifi','Wi‑Fi','<path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 
 ['hot','Хот-спот','<path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/>',0],
 ['acc','Доступность','<circle cx="16" cy="4" r="1"/><path d="m18 19 1-7-6 1"/><path d="m5 8 3-3 5.5 3-2.36 3.5"/><path d="M4.24 14.5a5 5 0 0 0 6.88 6"/><path d="M13.76 17.5a5 5 0 0 0-6.88-6"/>',0],
 ['share','Обмен','<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="m16 6-4-4-4 4"/><path d="M12 2v13"/>',0]];
-const DEF={theme:'dark',handle:true,glow:true,ticker:true,clockBar:true,secs:false,qorder:QT.map(t=>t[0]),tmr:{d:0,h:0,m:0,s:0}};
+const DEF={theme:'dark',handle:true,glow:true,ticker:true,clockBar:true,secs:false,autostart:false,blur:true,qorder:QT.map(t=>t[0]),tmr:{d:0,h:0,m:0,s:0}};
 let S={...DEF};try{Object.assign(S,JSON.parse(localStorage.getItem('glow-settings')||'{}'))}catch(e){}
 const save=()=>{try{localStorage.setItem('glow-settings',JSON.stringify(S))}catch(e){}};
 const root=document.documentElement,segB=[...$('#seg').querySelectorAll('button')],sl=$('#slist');
-const ROWS=[['handle','Полоска сверху'],['glow','Свечение от обложки'],['ticker','Текст песни сверху'],['clockBar','Часы на плашке сверху'],['secs','Секунды в часах']];
+const ROWS=[['autostart','Автозапуск'],['handle','Полоска сверху'],['glow','Свечение от обложки'],['ticker','Текст песни сверху'],['clockBar','Часы на плашке сверху'],['secs','Секунды в часах'],['blur','Размытие фона под островом']];
 ROWS.forEach(([k,l])=>{const r=document.createElement('div');r.className='opt';r.dataset.k=k;
   r.innerHTML=`<span>${l}</span><button class="sw" role="switch" aria-label="${l}"></button>`;sl.append(r)});
 function applyS(){
@@ -491,10 +504,16 @@ function applyS(){
   root.classList.toggle('nohandle',!S.handle);
   ROWS.forEach(([k])=>{const b=sl.querySelector(`[data-k="${k}"] .sw`);b.classList.toggle('on',!!S[k]);b.setAttribute('aria-pressed',!!S[k])});
   if(!S.glow)$('#glow').style.opacity=0;
+  invoke('set_blur',{on:!!S.blur});
+  if(!S.blur){isl.classList.remove('bb');bgb.classList.remove('on')}
 }
 segB.forEach((b,i)=>b.onclick=()=>{S.theme=['light','dark','black'][i];save();applyS()});
-sl.addEventListener('click',e=>{const b=e.target.closest('.sw');if(b){const k=b.parentNode.dataset.k;S[k]=!S[k];save();applyS();apply()}});
+sl.addEventListener('click',e=>{const b=e.target.closest('.sw');if(!b)return;const k=b.parentNode.dataset.k,nv=!S[k];
+  if(k==='autostart'){ // автозапуск живёт в реестре Windows: показываем то, что получилось на самом деле
+    invoke('set_autostart',{on:nv}).then(ok=>{S.autostart=ok?nv:!nv;save();applyS()});return}
+  S[k]=nv;save();applyS();apply()});
 applyS();
+invoke('get_autostart').then(v=>{if(v!==null){S.autostart=!!v;applyS()}});
 
 // Быстрые настройки: включение, порядок (карандаш), сохранение
 const qg=$('#qg'),qm=Object.fromEntries(QT.map(t=>[t[0],t]));

@@ -275,24 +275,109 @@ pub mod names {
     }
 }
 
-// ---------- Подложка с размытием фона ----------
-// Отдельное окно без содержимого лежит под островом. Размытие рабочего стола применяется
-// ко всему окну, а скруглённая область обрезает его точно по форме острова.
-pub mod blur {
-    use windows::Win32::Foundation::{BOOL, HWND};
-    use windows::Win32::Graphics::Gdi::{CreateRectRgn, CreateRoundRectRgn, SetWindowRgn};
+// ---------- Снимок фона под островом ----------
+// Размытие делаем сами: снимаем кусок экрана под окном приложения (уменьшенный), а интерфейс
+// размывает его и кладёт под остров. Системные эффекты размытия окон не используются,
+// поэтому чёрных прямоугольников быть не может: если снимок не получился, остров просто без размытия.
+pub mod snap {
+    use base64::Engine;
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::Graphics::Gdi::*;
+    use windows::Win32::UI::WindowsAndMessaging::{SetWindowDisplayAffinity, WINDOW_DISPLAY_AFFINITY};
 
-    pub fn set_region(hwnd: isize, x: i32, y: i32, w: i32, h: i32, r: i32, on: bool) {
+    // 0x11: окно не попадает в снимки экрана (Windows 10 2004 и новее), 0: обычный режим
+    const EXCLUDE: WINDOW_DISPLAY_AFFINITY = WINDOW_DISPLAY_AFFINITY(0x11);
+    const NORMAL: WINDOW_DISPLAY_AFFINITY = WINDOW_DISPLAY_AFFINITY(0);
+
+    // x, y, w, h: прямоугольник экрана в физических пикселях; div: во сколько раз уменьшить
+    pub fn grab(hwnd: isize, x: i32, y: i32, w: i32, h: i32, div: i32) -> Option<String> {
+        if w <= 0 || h <= 0 { return None; }
         unsafe {
             let hw = HWND(hwnd as *mut core::ffi::c_void);
-            // пустая область: подложки не видно совсем
-            let rgn = if on && w > 0 && h > 0 {
-                CreateRoundRectRgn(x, y, x + w + 1, y + h + 1, r * 2, r * 2)
+            // на время снимка прячем само окно Glow, чтобы остров не снялся сам на себя
+            let hidden = SetWindowDisplayAffinity(hw, EXCLUDE).is_ok();
+            if hidden { std::thread::sleep(std::time::Duration::from_millis(60)); }
+            let res = capture(x, y, w, h, div.max(1));
+            if hidden { let _ = SetWindowDisplayAffinity(hw, NORMAL); }
+            res
+        }
+    }
+
+    unsafe fn capture(x: i32, y: i32, w: i32, h: i32, div: i32) -> Option<String> {
+        let (dw, dh) = ((w / div).max(1), (h / div).max(1));
+        let screen = GetDC(HWND(core::ptr::null_mut()));
+        if screen.is_invalid() { return None; }
+        let mem = CreateCompatibleDC(screen);
+        let bmp = CreateCompatibleBitmap(screen, dw, dh);
+        let old = SelectObject(mem, HGDIOBJ(bmp.0));
+        let _ = SetStretchBltMode(mem, HALFTONE);
+        let _ = SetBrushOrgEx(mem, 0, 0, None);
+        let copied = StretchBlt(mem, 0, 0, dw, dh, screen, x, y, w, h,
+                                ROP_CODE(SRCCOPY.0 | CAPTUREBLT.0)).as_bool();
+        // GetDIBits работает только с картинкой, которая ни в какой контекст не выбрана
+        SelectObject(mem, old);
+        let mut pix = vec![0u8; (dw as usize) * (dh as usize) * 4];
+        let mut bi: BITMAPINFO = core::mem::zeroed();
+        bi.bmiHeader.biSize = core::mem::size_of::<BITMAPINFOHEADER>() as u32;
+        bi.bmiHeader.biWidth = dw;
+        bi.bmiHeader.biHeight = dh; // положительная высота: строки идут снизу вверх, как ждёт формат BMP
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        bi.bmiHeader.biCompression = BI_RGB.0;
+        let lines = GetDIBits(mem, bmp, 0, dh as u32, Some(pix.as_mut_ptr() as *mut core::ffi::c_void),
+                              &mut bi, DIB_RGB_COLORS);
+        let _ = DeleteObject(HGDIOBJ(bmp.0));
+        let _ = DeleteDC(mem);
+        ReleaseDC(HWND(core::ptr::null_mut()), screen);
+        if !copied || lines == 0 { return None; }
+        for px in pix.chunks_exact_mut(4) { px[3] = 255; }
+        let mut out: Vec<u8> = Vec::with_capacity(54 + pix.len());
+        out.extend_from_slice(b"BM");
+        out.extend_from_slice(&((54 + pix.len()) as u32).to_le_bytes());
+        out.extend_from_slice(&[0u8; 4]);
+        out.extend_from_slice(&54u32.to_le_bytes());
+        out.extend_from_slice(&40u32.to_le_bytes());
+        out.extend_from_slice(&dw.to_le_bytes());
+        out.extend_from_slice(&dh.to_le_bytes());
+        out.extend_from_slice(&1u16.to_le_bytes());
+        out.extend_from_slice(&32u16.to_le_bytes());
+        out.extend_from_slice(&0u32.to_le_bytes());
+        out.extend_from_slice(&(pix.len() as u32).to_le_bytes());
+        out.extend_from_slice(&[0u8; 16]);
+        out.extend_from_slice(&pix);
+        Some(base64::engine::general_purpose::STANDARD.encode(out))
+    }
+}
+
+// ---------- Автозапуск вместе с Windows ----------
+// Запись в разделе Run текущего пользователя: права администратора не нужны.
+pub mod autostart {
+    use windows::core::w;
+    use windows::Win32::Foundation::ERROR_SUCCESS;
+    use windows::Win32::System::Registry::{
+        RegDeleteKeyValueW, RegGetValueW, RegSetKeyValueW, HKEY_CURRENT_USER, REG_SZ, RRF_RT_REG_SZ,
+    };
+
+    pub fn get() -> bool {
+        unsafe {
+            RegGetValueW(HKEY_CURRENT_USER, w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run"),
+                         w!("Glow"), RRF_RT_REG_SZ, None, None, None) == ERROR_SUCCESS
+        }
+    }
+
+    // Возвращает true, если после вызова состояние такое, как просили
+    pub fn set(on: bool) -> bool {
+        unsafe {
+            if on {
+                let Ok(exe) = std::env::current_exe() else { return false };
+                let val: Vec<u16> = format!("\"{}\"", exe.display()).encode_utf16().chain(Some(0)).collect();
+                RegSetKeyValueW(HKEY_CURRENT_USER, w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run"),
+                                w!("Glow"), REG_SZ.0, Some(val.as_ptr() as *const core::ffi::c_void),
+                                (val.len() * 2) as u32) == ERROR_SUCCESS
             } else {
-                CreateRectRgn(0, 0, 0, 0)
-            };
-            // после вызова область принадлежит системе, удалять её не нужно
-            let _ = SetWindowRgn(hw, rgn, BOOL(1));
+                let _ = RegDeleteKeyValueW(HKEY_CURRENT_USER, w!("Software\\Microsoft\\Windows\\CurrentVersion\\Run"), w!("Glow"));
+                !get()
+            }
         }
     }
 }
