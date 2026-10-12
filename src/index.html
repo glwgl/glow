@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><title>Glow</title>
+<style>
+*{box-sizing:border-box;margin:0;font-family:"Segoe UI",system-ui,sans-serif}
+html,body{background:transparent;overflow:hidden;color:#f4f4f6;user-select:none}
+:root{--mute:#9a9aa8;--acc:#7cf0c8;--acc2:#ff7aa8}
+#island{position:fixed;top:10px;left:50%;transform:translateX(-50%);background:#000;overflow:hidden;cursor:pointer}
+.pane{position:absolute;inset:0;padding:16px 20px;opacity:0;pointer-events:none;transition:opacity .18s}
+.pane.on{opacity:1;pointer-events:auto;transition-delay:.12s}
+#mini{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--mute);opacity:0;pointer-events:none;transition:opacity .15s}
+#mini.on{opacity:1}
+.dots{position:absolute;left:0;right:0;bottom:7px;display:flex;justify-content:center;gap:6px}
+.dots i{width:5px;height:5px;border-radius:50%;background:#444;transition:.2s;cursor:pointer}
+.dots i.on{background:#fff;width:14px;border-radius:3px}
+.row{display:flex;align-items:center;gap:14px}
+.art{width:64px;height:64px;border-radius:12px;background:linear-gradient(135deg,var(--acc2),#6a5cff);flex:none}
+.meta{min-width:0}.meta b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px}.meta span{font-size:12px;color:var(--mute)}
+.viz{margin-left:auto;display:flex;align-items:flex-end;gap:4px;height:40px}
+.viz u{width:6px;border-radius:3px;background:var(--acc);height:4px;display:block}
+.lyr{height:54px;margin-top:8px;text-align:center;display:flex;flex-direction:column;justify-content:center;gap:2px;overflow:hidden}
+.lyr p{font-size:12px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:15px}
+.lyr .c{font-size:16px;font-weight:600;color:#fff}
+.lyr .c.sw{animation:lin .25s}
+@keyframes lin{from{opacity:.2;transform:translateY(8px)}to{opacity:1;transform:none}}
+.bar{height:3px;background:#222;border-radius:2px;margin-top:2px}.bar i{display:block;height:100%;width:0;background:var(--acc);border-radius:2px}
+.ctl{display:flex;justify-content:center;gap:22px;margin-top:2px}
+button{background:none;border:0;color:#f4f4f6;cursor:pointer;font-size:20px;border-radius:8px;padding:2px 8px}
+button:focus-visible{outline:2px solid var(--acc)}
+.stat{display:flex;justify-content:space-around;align-items:center;height:100%;padding-bottom:10px;text-align:center}
+.stat b{font-size:26px;font-weight:600}.stat span{display:block;font-size:12px;color:var(--mute)}
+.bat{width:54px;height:22px;border:2px solid #fff;border-radius:6px;margin:6px auto;position:relative}.bat i{position:absolute;inset:2px;width:50%;background:var(--acc);border-radius:2px}
+.cal{display:flex;gap:18px}.cal>div:first-child{flex:1}.cal h4{font-size:13px;margin-bottom:6px}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);font-size:10.5px;text-align:center;gap:2px}
+.grid span{padding:3px 0;border-radius:50%;color:var(--mute)}.grid .h{color:#666}.grid .t{background:var(--acc2);color:#fff}
+.pomo{width:120px;text-align:center}.pomo b{font-size:30px;font-weight:600;display:block;font-variant-numeric:tabular-nums;margin:4px 0}
+.pomo button{font-size:12px;background:#1d1d22;padding:6px 10px;margin:2px}
+@media (prefers-reduced-motion:reduce){.lyr .c.sw{animation:none}}
+</style></head>
+<body>
+<div id="island" tabindex="0" aria-label="Остров Glow">
+  <div id="mini">♪ Glow</div>
+
+  <section class="pane on" data-m="0">
+    <div class="row"><div class="art"></div><div class="meta"><b>Ничего не играет</b><span>Запусти музыку в любом плеере</span></div>
+      <div class="viz" id="viz"><u></u><u></u><u></u><u></u><u></u></div></div>
+    <div class="lyr" id="lyr"><p></p><p class="c"></p><p></p></div>
+    <div class="bar"><i id="bi"></i></div>
+    <div class="ctl"><button id="prev" aria-label="Предыдущий">⏮</button><button id="play" aria-label="Играть/пауза">▶</button><button id="next" aria-label="Следующий">⏭</button><button id="load" aria-label="Загрузить .lrc" style="font-size:14px">📂</button><input type="file" id="fi" accept=".lrc" hidden></div>
+  </section>
+
+  <section class="pane" data-m="1">
+    <div class="stat">
+      <div><div class="bat"><i id="bf"></i></div><b id="bp">—</b><span id="bs">Батарея</span></div>
+      <div><b id="wt">—</b><span>Погода</span></div>
+    </div>
+  </section>
+
+  <section class="pane" data-m="2">
+    <div class="cal"><div><h4 id="mon"></h4><div class="grid" id="grid"></div></div>
+      <div class="pomo"><span style="font-size:12px;color:var(--mute)">Фокус</span><b id="tm">25:00</b><button id="ps">Старт</button><button id="pr">Сброс</button></div></div>
+  </section>
+
+  <div class="dots" id="dots"><i class="on"></i><i></i><i></i></div>
+</div>
+
+<script>
+const {invoke}=window.__TAURI__.core;
+const WEATHER=[52.37,4.90]; // широта и долгота для погоды: поменяй на свои
+const SIZES=[[380,214,34],[380,122,30],[400,214,32]],MINI=[170,34,17],N=3;
+let mode=0,open=true;
+const isl=document.getElementById('island');
+
+// Окно подгоняется под остров, чтобы прозрачная часть не мешала кликам по другим приложениям
+let ww=0,wh=0,ft;
+function fit(w,h){w+=20;h+=20;clearTimeout(ft);
+  const W=Math.max(w,ww),H=Math.max(h,wh);
+  if(W!==ww||H!==wh){ww=W;wh=H;invoke('fit',{w:W,h:H})}
+  ft=setTimeout(()=>{ww=w;wh=h;invoke('fit',{w,h})},700)}
+
+// Пружины: ширина, высота и радиус анимируются независимо
+const sp={w:{v:0,x:SIZES[0][0],t:SIZES[0][0]},h:{v:0,x:SIZES[0][1],t:SIZES[0][1]},r:{v:0,x:SIZES[0][2],t:SIZES[0][2]}};
+const K={w:170,h:200,r:260},D={w:17,h:19,r:24};let last=performance.now();
+function frame(now){
+  const dt=Math.min(.033,(now-last)/1000);last=now;
+  for(const k in sp){const s=sp[k];s.v+=((s.t-s.x)*K[k]-s.v*D[k])*dt;s.x+=s.v*dt}
+  isl.style.width=sp.w.x+'px';isl.style.height=Math.max(20,sp.h.x)+'px';isl.style.borderRadius=Math.max(10,sp.r.x)+'px';
+  viz(dt);tick();requestAnimationFrame(frame)}
+function apply(){
+  const s=open?SIZES[mode]:MINI;sp.w.t=s[0];sp.h.t=s[1];sp.r.t=s[2];fit(s[0],s[1]);
+  document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',open&&+p.dataset.m===mode));
+  document.getElementById('mini').classList.toggle('on',!open);
+  document.getElementById('dots').style.opacity=open?1:0;
+  [...document.getElementById('dots').children].forEach((d,i)=>d.classList.toggle('on',i===mode))}
+function go(d){if(!open)open=true;else mode=(mode+d+N)%N;apply()}
+isl.addEventListener('wheel',e=>{e.preventDefault();go(e.deltaY>0?1:-1)},{passive:false});
+let tx=null;
+isl.addEventListener('pointerdown',e=>{tx=e.target.closest('input')?null:e.clientX});
+isl.addEventListener('pointerup',e=>{if(tx===null)return;const dx=e.clientX-tx;tx=null;
+  if(Math.abs(dx)>40){go(dx<0?1:-1);return}
+  if(e.target.closest('button,input,.dots i'))return;open=!open;apply()});
+isl.addEventListener('keydown',e=>{if(e.key==='ArrowRight')go(1);if(e.key==='ArrowLeft')go(-1);if(e.key==='Enter'){open=!open;apply()}});
+isl.addEventListener('contextmenu',e=>{e.preventDefault();invoke('quit')}); // правый клик закрывает Glow
+[...document.getElementById('dots').children].forEach((d,i)=>d.onclick=e=>{e.stopPropagation();mode=i;open=true;apply()});
+
+// Музыка: реальный трек из системных медиасессий Windows
+let tr=null,base=0,at=0,playing=false,lines=[],idx=-2,key='';
+const $=s=>document.querySelector(s),lyr=document.querySelectorAll('#lyr p');
+const pos=()=>playing?base+(performance.now()-at)/1000:base;
+async function poll(){
+  try{const t=await invoke('now_playing');
+    if(!t){tr=null;playing=false;$('.meta b').textContent='Ничего не играет';$('.meta span').textContent='Запусти музыку в любом плеере';lines=[];key='';return}
+    tr=t;base=t.position;at=performance.now();playing=t.playing;
+    $('.meta b').textContent=t.title;$('.meta span').textContent=t.artist;
+    const k=t.artist+'|'+t.title;
+    if(k!==key){key=k;lines=[];idx=-2;loadLyrics(t,k)}
+  }catch(e){}}
+setInterval(poll,1000);poll();
+
+// Текст песни в тайминг: ищется по исполнителю и названию в LRCLIB (lrclib.net)
+async function loadLyrics(t,k){
+  try{const r=await fetch('https://lrclib.net/api/get?artist_name='+encodeURIComponent(t.artist)+'&track_name='+encodeURIComponent(t.title)+(t.duration?'&duration='+Math.round(t.duration):''));
+    if(!r.ok)return;const j=await r.json();
+    if(j.syncedLyrics&&k===key){lines=parseLrc(j.syncedLyrics);idx=-2}}catch(e){}}
+function parseLrc(t){const out=[];t.split(/\r?\n/).forEach(l=>{const txt=l.replace(/\[[^\]]*\]/g,'').trim();
+  [...l.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)].forEach(x=>out.push([parseInt(x[1])*60+parseFloat(x[2]),txt]))});
+  return out.sort((a,b)=>a[0]-b[0])}
+function tick(){
+  const p=pos();let i=-1;for(let k=0;k<lines.length;k++){if(lines[k][0]<=p)i=k;else break}
+  if(i!==idx){idx=i;
+    lyr[0].textContent=(lines[i-1]||[])[1]||'';
+    lyr[1].textContent=lines.length?((lines[i]||[])[1]||'♪'):(tr?'Текст не найден: загрузи .lrc':'');
+    lyr[2].textContent=(lines[i+1]||[])[1]||'';
+    lyr[1].classList.remove('sw');void lyr[1].offsetWidth;lyr[1].classList.add('sw')}
+  $('#bi').style.width=(tr&&tr.duration?Math.min(100,p/tr.duration*100):0)+'%';
+  $('#play').textContent=playing?'⏸':'▶'}
+const cmd=c=>{invoke('media_cmd',{cmd:c});setTimeout(poll,300)};
+$('#prev').onclick=()=>cmd('prev');$('#play').onclick=()=>cmd('toggle');$('#next').onclick=()=>cmd('next');
+$('#load').onclick=()=>$('#fi').click();
+$('#fi').onchange=async e=>{const f=e.target.files[0];if(f){lines=parseLrc(await f.text());idx=-2}e.target.value=''};
+
+// Визуализатор: пока анимация, не реальный звук
+const bars=[...document.querySelectorAll('#viz u')],bs=bars.map(()=>({x:4,v:0,t:4}));
+function viz(dt){bs.forEach((b,i)=>{
+  if(playing&&Math.random()<dt*7)b.t=6+Math.random()*34*(1-i*.08);if(!playing)b.t=4;
+  b.v+=((b.t-b.x)*300-b.v*14)*dt;b.x+=b.v*dt;bars[i].style.height=Math.max(3,b.x)+'px'})}
+
+// Статус: батарея и погода
+async function status(){
+  try{const b=await invoke('battery_info');if(b){$('#bp').textContent=Math.round(b[0])+'%';$('#bf').style.width=Math.max(4,b[0]*.9)+'%';$('#bs').textContent=b[1]?'Заряжается':'Батарея'}else{$('#bp').textContent='ПК';$('#bs').textContent='Без батареи'}}catch(e){}
+  try{const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${WEATHER[0]}&longitude=${WEATHER[1]}&current=temperature_2m`);
+    const j=await r.json();$('#wt').textContent=Math.round(j.current.temperature_2m)+'°'}catch(e){}}
+status();setInterval(status,600000);
+
+// Календарь и Pomodoro
+const now=new Date(),y=now.getFullYear(),m=now.getMonth(),g=$('#grid');
+$('#mon').textContent=now.toLocaleDateString('ru',{month:'long',year:'numeric'});
+['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(d=>g.insertAdjacentHTML('beforeend',`<span class="h">${d}</span>`));
+for(let i=0;i<(new Date(y,m,1).getDay()+6)%7;i++)g.insertAdjacentHTML('beforeend','<span></span>');
+for(let d=1;d<=new Date(y,m+1,0).getDate();d++)g.insertAdjacentHTML('beforeend',`<span class="${d===now.getDate()?'t':''}">${d}</span>`);
+let left=1500,timer=null;const tm=$('#tm'),ps=$('#ps');
+const show=()=>tm.textContent=String(Math.floor(left/60)).padStart(2,'0')+':'+String(left%60).padStart(2,'0');
+ps.onclick=()=>{if(timer){clearInterval(timer);timer=null;ps.textContent='Старт';return}ps.textContent='Пауза';
+  timer=setInterval(()=>{left--;show();if(left<=0){clearInterval(timer);timer=null;ps.textContent='Старт';left=1500;show()}},1000)};
+$('#pr').onclick=()=>{clearInterval(timer);timer=null;left=1500;show();ps.textContent='Старт'};
+
+show();apply();requestAnimationFrame(frame);
+</script></body></html>
