@@ -121,22 +121,24 @@ fn open_settings(uri: String) {
 const WIN_W: f64 = 700.0;
 const WIN_H: f64 = 520.0;
 
-// Форма острова в координатах окна: нужна для размытия фона строго под островом.
+// Форма острова в координатах окна: по ней обрезается размытая подложка.
 // tw, th: размер, до которого остров вырастет (для слежения за мышью).
 #[tauri::command]
-fn shape(win: tauri::WebviewWindow, x: f64, y: f64, w: f64, h: f64, r: f64, tw: f64, th: f64, on: bool) {
+fn shape(app: tauri::AppHandle, x: f64, y: f64, w: f64, h: f64, r: f64, tw: f64, th: f64, on: bool) {
     ISL_W.store(tw.to_bits(), Ordering::Relaxed);
     ISL_H.store(th.to_bits(), Ordering::Relaxed);
     #[cfg(windows)]
     {
-        if let Ok(hw) = win.hwnd() {
-            let sf = win.scale_factor().unwrap_or(1.0);
-            sys::blur::set(hw.0 as isize, (x * sf).round() as i32, (y * sf).round() as i32,
-                           (w * sf).round() as i32, (h * sf).round() as i32, (r * sf).round() as i32, on);
+        if let Some(b) = app.get_webview_window("blur") {
+            if let Ok(hw) = b.hwnd() {
+                let sf = b.scale_factor().unwrap_or(1.0);
+                sys::blur::set_region(hw.0 as isize, (x * sf).round() as i32, (y * sf).round() as i32,
+                                      (w * sf).round() as i32, (h * sf).round() as i32, (r * sf).round() as i32, on);
+            }
         }
     }
     #[cfg(not(windows))]
-    { let _ = (win, x, y, w, h, r, on); }
+    { let _ = (app, x, y, w, h, r, on); }
 }
 
 // Интерфейс сообщает, что остров открыт или закрыт (например, открыли кликом)
@@ -167,6 +169,7 @@ fn watch_cursor(app: tauri::AppHandle) {
     std::thread::spawn(move || {
         let (mut outside, mut since_open, mut dwell) = (0u32, 0u32, 0u32);
         let (mut pinned, mut touched) = (false, false);
+        let (mut last_size, mut grace) = ((0u64, 0u64), 0u32);
         let mut last: Option<(f64, f64)> = None;
         let mut through = true;
         loop {
@@ -200,8 +203,8 @@ fn watch_cursor(app: tauri::AppHandle) {
                     && c.y >= my && c.y - my <= 3.0
                     && (c.x - (mx + mw / 2.0)).abs() <= 60.0 * sf;
                 if hot && moved <= 10.0 * sf && !button_down() { dwell += 1 } else { dwell = 0 }
-                // около 0,45 с покоя у края
-                if dwell >= 11 {
+                // около 0,3 с покоя у края
+                if dwell >= 8 {
                     dwell = 0;
                     if !fullscreen_app() {
                         OPEN.store(true, Ordering::Relaxed);
@@ -212,6 +215,13 @@ fn watch_cursor(app: tauri::AppHandle) {
                 }
             } else {
                 since_open += 1;
+                let size_now = (ISL_W.load(Ordering::Relaxed), ISL_H.load(Ordering::Relaxed));
+                if size_now != last_size {
+                    // остров сменил размер (другая вкладка): даём мыши время, не закрываемся
+                    last_size = size_now;
+                    grace = since_open + 40;
+                    outside = 0;
+                }
                 let (Ok(p), Ok(s)) = (win.outer_position(), win.outer_size()) else { continue };
                 let (iw, ih) = (f64::from_bits(ISL_W.load(Ordering::Relaxed)) * sf, f64::from_bits(ISL_H.load(Ordering::Relaxed)) * sf);
                 let cx = p.x as f64 + s.width as f64 / 2.0;
@@ -225,7 +235,7 @@ fn watch_cursor(app: tauri::AppHandle) {
                 let close = if pinned && !touched {
                     since_open > 150 // открыли клавишей, мышь не трогали: закроется через 6 секунд
                 } else {
-                    outside >= 8 && since_open > 15 // около 0,3 с вне острова
+                    outside >= 20 && since_open > 15 && since_open > grace // около 0,8 с вне острова
                 };
                 if close {
                     OPEN.store(false, Ordering::Relaxed);
@@ -245,17 +255,37 @@ fn main() {
             shape, set_open, quit
         ])
         .setup(|app| {
+            // Положение окон: по центру вверху основного экрана
+            let (mut wx, mut wy) = (0.0, 0.0);
             if let Some(win) = app.get_webview_window("main") {
-                let _ = win.set_size(tauri::LogicalSize::new(WIN_W, WIN_H));
                 if let Ok(Some(m)) = win.primary_monitor() {
                     let sf = m.scale_factor();
-                    let x = m.position().x as f64 / sf + (m.size().width as f64 / sf - WIN_W) / 2.0;
-                    let y = m.position().y as f64 / sf;
-                    let _ = win.set_position(tauri::LogicalPosition::new(x, y));
+                    wx = m.position().x as f64 / sf + (m.size().width as f64 / sf - WIN_W) / 2.0;
+                    wy = m.position().y as f64 / sf;
                 }
+                let _ = win.set_size(tauri::LogicalSize::new(WIN_W, WIN_H));
+                let _ = win.set_position(tauri::LogicalPosition::new(wx, wy));
                 let _ = win.set_ignore_cursor_events(true);
-                let _ = win.show();
             }
+
+            // Подложка с размытием: создаётся и показывается раньше основного окна, поэтому лежит под ним
+            if let Ok(b) = tauri::WebviewWindowBuilder::new(app, "blur", tauri::WebviewUrl::App("blur.html".into()))
+                .title("Glow blur").decorations(false).transparent(true).always_on_top(true)
+                .skip_taskbar(true).resizable(false).shadow(false).focused(false).focusable(false)
+                .visible(false).inner_size(WIN_W, WIN_H).position(wx, wy).build()
+            {
+                let _ = b.set_ignore_cursor_events(true);
+                #[cfg(windows)]
+                {
+                    if let Ok(hw) = b.hwnd() { sys::blur::set_region(hw.0 as isize, 0, 0, 0, 0, 0, false); }
+                    if window_vibrancy::apply_blur(&b, Some((0, 0, 0, 0))).is_err() {
+                        let _ = window_vibrancy::apply_acrylic(&b, Some((0, 0, 0, 0)));
+                    }
+                }
+                let _ = b.show();
+            }
+            if let Some(win) = app.get_webview_window("main") { let _ = win.show(); }
+
             watch_cursor(app.handle().clone());
 
             // Горячая клавиша Ctrl+Alt+G: открыть или закрыть остров

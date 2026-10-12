@@ -1,6 +1,6 @@
 [package]
 name = "glow-app"
-version = "0.2.3"
+version = "0.2.4"
 edition = "2021"
 
 [build-dependencies]
@@ -13,6 +13,7 @@ battery = "0.7"
 
 [target.'cfg(windows)'.dependencies]
 base64 = "0.22"
+window-vibrancy = "0.6"
 windows = { version = "0.58", features = [
   "Foundation",
   "Foundation_Collections",
@@ -22,7 +23,6 @@ windows = { version = "0.58", features = [
   "Devices_Bluetooth",
   "Devices_Enumeration",
   "Networking_Connectivity",
-  "Win32_Graphics_Dwm",
   "Win32_Graphics_Gdi",
   "Win32_Foundation",
   "Win32_Media_Audio",

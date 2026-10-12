@@ -9,14 +9,15 @@ GLOW 0.2: остров вверху экрана для Windows
   1. Обнови файлы в репозитории (список ниже).
   2. Вкладка Actions, слева "Build installer", справа "Run workflow".
   3. Через 5-10 минут зелёная галочка, затем Releases, файл
-     Glow_0.2.3_x64-setup.exe.
+     Glow_0.2.4_x64-setup.exe.
 
 ФАЙЛЫ, КОТОРЫЕ ОБНОВИТЬ ИЛИ ДОБАВИТЬ
   src/index.html                          заменить
+  src/blur.html                           НОВЫЙ
   src-tauri/src/main.rs                   заменить
-  src-tauri/src/sys.rs                    НОВЫЙ
+  src-tauri/src/sys.rs                    заменить
   src-tauri/Cargo.toml                    заменить
-  src-tauri/tauri.conf.json               заменить (только версия 0.2.3)
+  src-tauri/tauri.conf.json               заменить (версия и размер окна)
   src-tauri/capabilities/default.json     НОВЫЙ
   package.json                            заменить (только версия)
 

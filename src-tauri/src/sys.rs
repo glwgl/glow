@@ -275,24 +275,24 @@ pub mod names {
     }
 }
 
-// ---------- Размытие фона под островом (DWM), только внутри скруглённой области ----------
+// ---------- Подложка с размытием фона ----------
+// Отдельное окно без содержимого лежит под островом. Размытие рабочего стола применяется
+// ко всему окну, а скруглённая область обрезает его точно по форме острова.
 pub mod blur {
     use windows::Win32::Foundation::{BOOL, HWND};
-    use windows::Win32::Graphics::Dwm::{DwmEnableBlurBehindWindow, DWM_BB_BLURREGION, DWM_BB_ENABLE, DWM_BLURBEHIND};
-    use windows::Win32::Graphics::Gdi::{CreateRoundRectRgn, DeleteObject, HGDIOBJ, HRGN};
+    use windows::Win32::Graphics::Gdi::{CreateRectRgn, CreateRoundRectRgn, SetWindowRgn};
 
-    pub fn set(hwnd: isize, x: i32, y: i32, w: i32, h: i32, r: i32, on: bool) {
+    pub fn set_region(hwnd: isize, x: i32, y: i32, w: i32, h: i32, r: i32, on: bool) {
         unsafe {
             let hw = HWND(hwnd as *mut core::ffi::c_void);
-            let rgn = if on && w > 0 && h > 0 { CreateRoundRectRgn(x, y, x + w, y + h, r * 2, r * 2) } else { HRGN(core::ptr::null_mut()) };
-            let bb = DWM_BLURBEHIND {
-                dwFlags: DWM_BB_ENABLE | DWM_BB_BLURREGION,
-                fEnable: BOOL(if on && !rgn.is_invalid() { 1 } else { 0 }),
-                hRgnBlur: rgn,
-                fTransitionOnMaximized: BOOL(0),
+            // пустая область: подложки не видно совсем
+            let rgn = if on && w > 0 && h > 0 {
+                CreateRoundRectRgn(x, y, x + w + 1, y + h + 1, r * 2, r * 2)
+            } else {
+                CreateRectRgn(0, 0, 0, 0)
             };
-            let _ = DwmEnableBlurBehindWindow(hw, &bb);
-            if !rgn.is_invalid() { let _ = DeleteObject(HGDIOBJ(rgn.0)); }
+            // после вызова область принадлежит системе, удалять её не нужно
+            let _ = SetWindowRgn(hw, rgn, BOOL(1));
         }
     }
 }
