@@ -135,7 +135,11 @@ fn shape(tw: f64, th: f64) {
 
 // Включить или выключить размытие фона под островом
 #[tauri::command]
-fn set_blur(on: bool) { BLUR_ON.store(on, Ordering::Relaxed); }
+fn set_blur(app: tauri::AppHandle, on: bool) {
+    let was = BLUR_ON.swap(on, Ordering::Relaxed);
+    // включили при открытом острове: снимка фона нет или он устарел, снимаем заново
+    if on && !was && OPEN.load(Ordering::Relaxed) { snap_bg(&app); }
+}
 
 // Забрать снимок фона, сделанный перед открытием острова
 #[tauri::command]
@@ -204,6 +208,7 @@ fn watch_cursor(app: tauri::AppHandle) {
         let (mut last_size, mut grace, mut hold_h) = ((0u64, 0u64), 0u32, 0.0f64);
         let mut last: Option<(f64, f64)> = None;
         let mut through = true;
+        let mut btn_prev = false;
         loop {
             std::thread::sleep(std::time::Duration::from_millis(40));
             let Some(win) = app.get_webview_window("main") else { continue };
@@ -230,6 +235,7 @@ fn watch_cursor(app: tauri::AppHandle) {
             }
 
             if !OPEN.load(Ordering::Relaxed) {
+                btn_prev = button_down();
                 set_through(&win, &mut through, true);
                 // зона открытия: узкая, около 120 пикселей по центру, у самого верхнего края
                 let hot = !PAUSED.load(Ordering::Relaxed)
@@ -278,7 +284,14 @@ fn watch_cursor(app: tauri::AppHandle) {
                 if inside { outside = 0; touched = true } else { outside += 1 }
                 // чем дальше мышь, тем быстрее закрытие: далеко 0,08 с, средне 0,2 с, рядом 0,36 с
                 let need = if dist > 120.0 { 2 } else if dist > 50.0 { 5 } else { 9 };
-                let close = if pinned && !touched {
+                // нажатие кнопки мыши мимо острова: закрываем сразу; окно в этот момент уже
+                // пропускает клики, так что нажатие достаётся программе под островом
+                let btn = button_down();
+                let click_out = btn && !btn_prev && iw > 0.0 && dist > 4.0 && since_open > 3;
+                btn_prev = btn;
+                let close = if click_out {
+                    true
+                } else if pinned && !touched {
                     since_open > 150 // открыли клавишей, мышь не трогали: закроется через 6 секунд
                 } else {
                     outside >= need && since_open > 6 && since_open > grace

@@ -16,7 +16,7 @@ body{background:transparent;color:var(--ink);user-select:none}
 #handle{position:fixed;top:calc(6px + env(safe-area-inset-top,0px));left:50%;width:44px;height:5px;margin-left:-22px;border-radius:3px;background:rgba(var(--fg),.4);border:0;padding:0;cursor:pointer;transition:opacity .3s,transform .3s}
 #handle:hover{transform:scaleX(1.3)}
 #handle.off{opacity:0;pointer-events:none}
-#glow{position:fixed;top:-40px;left:50%;width:560px;height:260px;margin-left:-280px;background:radial-gradient(closest-side,rgba(var(--gc,255,255,255),1),transparent);filter:blur(30px);opacity:0;transition:opacity .6s;pointer-events:none}
+#glow{position:fixed;top:-50px;left:50%;width:660px;height:320px;margin-left:-330px;background:radial-gradient(closest-side,rgba(var(--gc,255,255,255),1),transparent);filter:blur(30px) saturate(1.5) brightness(calc(1.15*var(--gb,1)));opacity:0;transition:opacity .6s;pointer-events:none}
 #island{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);overflow:hidden;background:var(--glass);backdrop-filter:blur(var(--blur,26px)) saturate(220%) brightness(1.08);-webkit-backdrop-filter:blur(var(--blur,26px)) saturate(220%) brightness(1.08);box-shadow:inset 0 0 0 1px var(--line),inset 1.5px 1.5px 1px var(--hi),inset -1px -1px 1px rgba(var(--fg),.1),inset 0 0 30px rgba(var(--fg),.05),0 26px 60px rgba(0,0,0,.4),0 2px 8px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .22s;z-index:5;max-width:calc(100vw - 16px)}
 #island.open{opacity:1;pointer-events:auto}
 .pane{position:absolute;left:0;top:0;width:100%;padding:18px 20px 0;opacity:0;pointer-events:none;transition:opacity .15s}
@@ -84,7 +84,7 @@ button svg{width:20px;height:20px;fill:currentColor}
 #island{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 /* размытый снимок фона под островом: лежит под содержимым, поверх него полупрозрачное стекло */
 #island.bb{background:transparent}
-#bgb{position:absolute;z-index:-1;pointer-events:none;opacity:0;transition:opacity .35s;background-size:100% 100%;background-repeat:no-repeat;filter:blur(10px) saturate(1.3)}
+#bgb{position:absolute;z-index:-1;pointer-events:none;opacity:0;transition:opacity .35s;background-size:100% 100%;background-repeat:no-repeat;filter:blur(calc(var(--blur,26px)*.4)) saturate(1.3)}
 #bgb.on{opacity:1}
 #bgb::after{content:"";position:absolute;inset:0;background:var(--glass)}
 #glow{will-change:opacity}
@@ -130,7 +130,7 @@ button svg{width:20px;height:20px;fill:currentColor}
 .ring.ring-ring{animation:rf .6s ease-in-out 6}@keyframes rf{50%{transform:scale(1.1)}}
 .toast{position:absolute;left:50%;bottom:60px;transform:translate(-50%,8px);padding:7px 14px;border-radius:999px;background:rgba(var(--fg),.2);backdrop-filter:blur(10px);font-size:12px;font-weight:500;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .25s,transform .35s cubic-bezier(.3,1.4,.5,1)}
 .toast.on{opacity:1;transform:translate(-50%,0)}
-:root[data-theme="black"]{--fg:255,255,255;--ink:#fff;--inv:#000;--mute:rgba(255,255,255,.55);--glass:rgba(0,0,0,.8);--line:rgba(255,255,255,.1);--hi:rgba(255,255,255,.12);--w1:#000;--w2:#17171a;--w3:#0a0a0c}
+:root[data-theme="black"]{--fg:255,255,255;--ink:#fff;--inv:#000;--mute:rgba(255,255,255,.55);--glass:rgba(0,0,0,var(--ga,.8));--line:rgba(255,255,255,.1);--hi:rgba(255,255,255,.12);--w1:#000;--w2:#17171a;--w3:#0a0a0c}
 :root[data-theme="black"] #island{backdrop-filter:blur(var(--blur,26px)) saturate(180%) brightness(.55);-webkit-backdrop-filter:blur(var(--blur,26px)) saturate(180%) brightness(.55)}
 .adj{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:11px;color:var(--mute)}.adj button{width:24px;height:24px;font-size:16px;line-height:1;background:rgba(var(--fg),.12)}.adj button:disabled{opacity:.3;pointer-events:none}
 .pomo .bt{display:flex;gap:6px;margin-top:8px}
@@ -167,15 +167,23 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.25)}
 input[type=range]:focus-visible{outline:2px solid var(--ink);outline-offset:4px}
 .rst{width:100%;height:34px;border-radius:12px;font-size:13px;font-weight:500;background:rgba(var(--fg),.08)}
 html.nohandle #handle{display:none}
+html.nosheen #island::before{display:none}
+.opt.dim{opacity:.45}
+.cat{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);margin:14px 4px 7px}.cat:first-child{margin-top:2px}
 html.noanim *{animation:none!important;transition:none!important}
-.aura{position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .7s;background:radial-gradient(130% 90% at 18% 0%,rgba(var(--gc,255,255,255),.68),transparent 62%),radial-gradient(90% 80% at 100% 100%,rgba(var(--gc,255,255,255),.4),transparent 65%)}
-#island.gl .aura{opacity:1}
+.aura{position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .7s;background:radial-gradient(130% 90% at 18% 0%,rgba(var(--gc,255,255,255),.95),transparent 66%),radial-gradient(90% 80% at 100% 100%,rgba(var(--gc,255,255,255),.7),transparent 68%)}
+#island.gl .aura{opacity:1;filter:brightness(var(--gb,1))}
+#island.gl2 .aura{background:radial-gradient(62% 120% at 50% 50%,rgba(var(--gc,255,255,255),1) 0%,rgba(var(--gc,255,255,255),.88) 30%,rgba(var(--gc,255,255,255),.3) 62%,rgba(0,0,0,.78) 100%);filter:saturate(1.9) brightness(var(--gb,1))}
+:root[data-theme="light"] #island.gl2 .aura{background:radial-gradient(78% 160% at 50% 50%,rgba(var(--gc,255,255,255),1) 0%,rgba(var(--gc,255,255,255),.85) 40%,rgba(var(--gc,255,255,255),.1) 100%)}
 #ticker{--ink:#fff;--fg:255,255,255;position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:50%;height:34px;width:120px;border-radius:17px;background:#000;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12),0 8px 24px rgba(0,0,0,.4);overflow:hidden;opacity:0;transform:translateX(-50%) scale(.7);transform-origin:top center;pointer-events:none;transition:opacity .3s,transform .55s cubic-bezier(.3,1.4,.5,1),width .55s cubic-bezier(.3,1.2,.5,1);z-index:4}
 #ticker.on{opacity:1;transform:translateX(-50%) scale(1)}
-.tl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;color:#fff}
+.tl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;color:var(--ink)}
+:root[data-theme="light"] #ticker{--ink:#111;--fg:0,0,0;background:#fff;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12),0 8px 24px rgba(0,0,0,.28)}
 .tl.out{animation:tout .4s cubic-bezier(.5,0,.8,.4) forwards}
 #clk{position:absolute;top:15px;right:22px;font-size:13px;font-weight:600;letter-spacing:.01em;font-variant-numeric:tabular-nums;color:var(--mute)}
 .tl.ck{font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.wv{display:inline-block;font-size:17px;margin-right:8px;transform-origin:70% 80%;animation:wave 1.1s ease-in-out 3}
+@keyframes wave{0%,100%{transform:rotate(0)}15%{transform:rotate(18deg)}30%{transform:rotate(-8deg)}45%{transform:rotate(18deg)}60%{transform:rotate(-4deg)}75%{transform:rotate(10deg)}}
 @keyframes ring{from{transform:rotate(-14deg)}to{transform:rotate(14deg)}}
 @keyframes tout{to{opacity:0;transform:translateY(-12px);filter:blur(6px)}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -268,11 +276,11 @@ function apply(){
   document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',open&&+p.dataset.m===mode));
   [...$('#tabs').querySelectorAll('button')].forEach((b,i)=>b.classList.toggle('on',i===mode));
   $('#tind').style.transform=`translateX(${mode*100}%)`;
-  $('#glow').style.opacity=open&&mode===0&&S.glow?.55:0;isl.classList.toggle('gl',open&&mode===0&&S.glow);
+  $('#glow').style.opacity=open&&mode===0&&S.glow&&S.gm!==2?.85:0;isl.classList.toggle('gl',open&&mode===0&&S.glow);isl.classList.toggle('gl2',open&&mode===0&&S.glow&&S.gm===2);
   $('#handle').classList.toggle('off',open);
   if(open&&mode===1){loadBatt();loadRadios();loadNames();loadSliders()}
 }
-function setOpen(v){if(open===v)return;open=v;invoke('set_open',{v});if(v){isl.classList.remove('bb');bgb.classList.remove('on');loadBg()}apply()}
+function setOpen(v){if(open===v)return;open=v;if(v&&ringT&&!ringOpenStart)stopRing();invoke('set_open',{v});if(v){isl.classList.remove('bb');bgb.classList.remove('on');loadBg()}apply()}
 function setMode(i){mode=(i+4)%4;apply()}
 $('#tabs').querySelectorAll('button').forEach((b,i)=>b.onclick=()=>setMode(i));
 
@@ -301,10 +309,11 @@ const l0=$('#l0'),l1=$('#l1'),l2=$('#l2');
 function setText(el,t){if(el.textContent===t)return;el.classList.remove('tx');void el.offsetWidth;el.textContent=t;el.classList.add('tx')}
 function setCur(t){l1.innerHTML='';(t||'♪').split(' ').forEach((w,i)=>{const s=document.createElement('span');s.className='w';s.textContent=w;s.style.animationDelay=i*55+'ms';l1.append(s,' ')})}
 const fill=(ws,f)=>{for(let j=0;j<ws.length;j++)ws[j].style.setProperty('--w',Math.min(1,Math.max(0,f*ws.length-j)))};
-const tk=$('#ticker');let tkOn=false,nOn=false,ckOn=false,ckText='';
+const tk=$('#ticker');let tkOn=false,nOn=false,ckOn=false,ckText='',gOn=false,greetUntil=0,greetMsg='';
 const clockStr=()=>{const d=new Date(),p=n=>String(n).padStart(2,'0');return p(d.getHours())+':'+p(d.getMinutes())+(S.secs?':'+p(d.getSeconds()):'')};
+const dateStr=()=>new Date().toLocaleDateString('ru',{weekday:'short',day:'numeric',month:'short'}).replace(/\./g,'');
 function tkSet(t){
-  if(ckOn)return;
+  if(ckOn||gOn||greetUntil>performance.now())return;
   if(note>performance.now())return;
   tk.querySelectorAll('.tl:not(.out)').forEach(o=>{o.classList.add('out');setTimeout(()=>o.remove(),420)});
   if(!t)return;
@@ -312,12 +321,14 @@ function tkSet(t){
   t.split(' ').forEach((w,i)=>{const e=document.createElement('span');e.className='w';e.textContent=w;e.style.animationDelay=i*55+'ms';sp.append(e,' ')});
   d.append(sp);tk.append(d);tk.style.width=Math.min(480,sp.offsetWidth+44)+'px'}
 const LEAD=.25; // строка чуть раньше звука, так кажется «в ритм»
-function lyr(){
+let fd=0; // сглаженная доля заливки строки: резкие смены темпа между строками размазываются
+function lyr(dt){
   const pp=pos+LEAD;let i=-1;for(let k=0;k<L.length;k++){if(L[k][0]<=pp)i=k;else break}
   if(i<idx&&idx>=0&&L[idx][0]-pp<1.2)i=idx; // не прыгаем назад из-за мелких колебаний
-  if(i!==idx){idx=i;setText(l0,(L[i-1]||[])[1]||'');setCur((L[i]||[])[1]);tkSet((L[i]||[])[1]||'');setText(l2,(L[i+1]||[])[1]||'')}
+  if(i!==idx){idx=i;fd=0;setText(l0,(L[i-1]||[])[1]||'');setCur((L[i]||[])[1]);tkSet((L[i]||[])[1]||'');setText(l2,(L[i+1]||[])[1]||'')}
   const t0=(L[i]||[0])[0],t1=(L[i+1]||[t0+4])[0],f=Math.min(1,Math.max(0,(pp-t0)/Math.max(.1,t1-t0-.5))),ws=l1.children;
-  fill(ws,f);const tw=tk.querySelector('.tl:not(.out) > span');if(tw)fill(tw.children,f)
+  fd+=(f-fd)*(1-Math.exp(-dt*4));if(Math.abs(f-fd)<.002)fd=f;
+  fill(ws,fd);const tw=tk.querySelector('.tl:not(.out) > span');if(tw)fill(tw.children,fd)
 }
 const spin=(el,deg)=>el.animate([{transform:'rotate(0deg)'},{transform:`rotate(${deg}deg)`}],{duration:750,easing:'cubic-bezier(.3,1.25,.4,1)'});
 const nudge=(el,dx)=>el.animate([{transform:'none'},{transform:`translateX(${dx}px) scale(.92)`,offset:.35},{transform:'none'}],{duration:500,easing:'cubic-bezier(.3,1.5,.5,1)'});
@@ -441,27 +452,35 @@ function frame(now){
   sendShape();
   {const bx=Math.round(-(innerWidth-sp.w.x)/2*10)/10;if(bx!==bbx){bbx=bx;bgb.style.left=bx+'px'}}
   if(playing&&!scrub){pos=Math.min(DUR,pos+dt)}
-  viz(dt);lyr();
+  viz(dt);lyr(dt);
   const noteOn=note>performance.now()&&!open;
   if(noteOn!==nOn){nOn=noteOn;tk.querySelectorAll('.tl:not(.out)').forEach(o=>{o.classList.add('out');setTimeout(()=>o.remove(),420)});
-    if(noteOn){const d=document.createElement('div');d.className='tl';d.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:8px;animation:ring .5s ease-in-out infinite alternate;transform-origin:50% 10%"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>Таймер: время вышло';d.style.animation='none';tk.append(d);tk.style.width='230px'}
+    if(noteOn){const d=document.createElement('div');d.className='tl nt';d.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:8px;animation:ring .5s ease-in-out infinite alternate;transform-origin:50% 10%"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>Таймер: время вышло';d.style.animation='none';tk.append(d);tk.style.width='230px'}
     else idx=-2}
+  {const gNow=greetUntil>performance.now()&&!open&&!noteOn;
+   if(gNow!==gOn){gOn=gNow;tk.querySelectorAll('.tl:not(.out)').forEach(o=>{o.classList.add('out');setTimeout(()=>o.remove(),420)});
+     if(gOn){const d=document.createElement('div');d.className='tl nt';const sp=document.createElement('span');sp.className='tx';sp.style.cssText='display:inline-block;white-space:nowrap';
+       const w=document.createElement('span');w.className='wv';w.textContent='\u{1F44B}';sp.append(w,document.createTextNode(greetMsg));d.append(sp);tk.append(d);
+       tk.style.width=Math.min(480,sp.offsetWidth+44)+'px'}
+     else idx=-2}}
   const lyrMode=!!(S.ticker&&playing&&L.length>0);
-  const ckWant=!!(S.clockBar&&!open&&!noteOn&&!lyrMode);
+  const ckWant=!!(S.clockBar&&!open&&!noteOn&&!gOn&&!lyrMode);
   if(ckWant!==ckOn){ckOn=ckWant;
-    tk.querySelectorAll('.tl:not(.out)').forEach(o=>{o.classList.add('out');setTimeout(()=>o.remove(),420)});
+    tk.querySelectorAll('.tl:not(.out):not(.nt)').forEach(o=>{o.classList.add('out');setTimeout(()=>o.remove(),420)});
     if(ckWant){const d=document.createElement('div');d.className='tl ck';d.innerHTML='<span></span>';tk.append(d);ckText=''}
     else idx=-2}
   const hm=clockStr();
-  if(ckOn&&hm!==ckText){ckText=hm;const e=tk.querySelector('.tl.ck:not(.out) span');if(e)e.textContent=hm;tk.style.width=(S.secs?122:100)+'px'}
-  const el=$('#clk');if(el&&el.textContent!==hm)el.textContent=hm;
-  const want=noteOn||ckOn||!!(S.ticker&&!open&&playing&&(L[idx]||[])[1]);
+  {const ts=timer?tmrStr(left):'',key=hm+'|'+ts;
+   if(ckOn&&key!==ckText){ckText=key;const e=tk.querySelector('.tl.ck:not(.out) span');
+     if(e){e.innerHTML=hm+(ts?TI+ts:'');tk.style.width=Math.max(S.secs?122:100,Math.min(480,Math.ceil((e.offsetWidth+44)/8)*8))+'px'}}}
+  const el=$('#clk');if(el){const ds=dateStr()+'  '+hm;if(el.textContent!==ds)el.textContent=ds}
+  const want=noteOn||gOn||ckOn||!!(S.ticker&&!open&&playing&&(L[idx]||[])[1]);
   if(want!==tkOn){tkOn=want;tk.classList.toggle('on',want)}
   $('#handle').classList.toggle('off',open||tkOn);
   {const k=1-Math.exp(-dt*12);ta.s=(playing?1:.86)*(hovA?1.04:1);ca.rx+=(ta.rx-ca.rx)*k;ca.ry+=(ta.ry-ca.ry)*k;ca.s+=(ta.s-ca.s)*k;
    a3.style.transform=`scale(${ca.s}) rotateX(${ca.rx}deg) rotateY(${ca.ry}deg)`;a3.style.boxShadow=`${ca.ry*.7}px ${12-ca.rx*.7}px 28px rgba(0,0,0,.45)`}
   const pc=pos/DUR*100,ts=fmt(pos);$('#bi').style.width=pc+'%';$('#th').style.left=pc+'%';if(ts!==lastTs){lastTs=ts;$('#t0').textContent=ts}
-  if(open&&mode===0&&S.glow)$('#glow').style.opacity=.45+avg*.45;
+  if(open&&mode===0&&S.glow&&S.gm!==2)$('#glow').style.opacity=Math.min(1,.7+avg*.3);
   requestAnimationFrame(frame)
 }
 
@@ -491,20 +510,46 @@ const QT=[['wifi','Wi‑Fi','<path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 
 ['hot','Хот-спот','<path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/>',0],
 ['acc','Доступность','<circle cx="16" cy="4" r="1"/><path d="m18 19 1-7-6 1"/><path d="m5 8 3-3 5.5 3-2.36 3.5"/><path d="M4.24 14.5a5 5 0 0 0 6.88 6"/><path d="M13.76 17.5a5 5 0 0 0-6.88-6"/>',0],
 ['share','Обмен','<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="m16 6-4-4-4 4"/><path d="M12 2v13"/>',0]];
-const DEF={theme:'dark',handle:true,glow:true,ticker:true,clockBar:true,secs:false,autostart:false,blur:true,qorder:QT.map(t=>t[0]),tmr:{d:0,h:0,m:0,s:0}};
+const DEF={theme:'dark',handle:true,glow:true,ticker:true,clockBar:true,secs:false,autostart:false,blur:true,sheen:true,greet:true,bl:26,ga:null,gm:1,gb:100,qorder:QT.map(t=>t[0]),tmr:{d:0,h:0,m:0,s:0}};
 let S={...DEF};try{Object.assign(S,JSON.parse(localStorage.getItem('glow-settings')||'{}'))}catch(e){}
 const save=()=>{try{localStorage.setItem('glow-settings',JSON.stringify(S))}catch(e){}};
 const root=document.documentElement,segB=[...$('#seg').querySelectorAll('button')],sl=$('#slist');
-const ROWS=[['autostart','Автозапуск'],['handle','Полоска сверху'],['glow','Свечение от обложки'],['ticker','Текст песни сверху'],['clockBar','Часы на плашке сверху'],['secs','Секунды в часах'],['blur','Размытие фона под островом']];
+const themeRow=sl.querySelector('.opt'),items={theme:themeRow};
+const ROWS=[['autostart','Автозапуск'],['handle','Полоска сверху'],['glow','Свечение от обложки'],['ticker','Текст песни сверху'],['clockBar','Часы на плашке сверху'],['secs','Секунды в часах'],['blur','Размытие фона под островом'],['sheen','Блики на стекле'],['greet','Приветствие при запуске']];
 ROWS.forEach(([k,l])=>{const r=document.createElement('div');r.className='opt';r.dataset.k=k;
-  r.innerHTML=`<span>${l}</span><button class="sw" role="switch" aria-label="${l}"></button>`;sl.append(r)});
+  r.innerHTML=`<span>${l}</span><button class="sw" role="switch" aria-label="${l}"></button>`;items[k]=r;
+  if(k==='glow'){const g=document.createElement('div');g.className='opt';g.id='gmrow';
+    g.innerHTML='<span>Режим свечения</span><div class="seg" id="gseg"><i></i><button>Режим 1</button><button>Режим 2</button></div>';items.gm=g;
+    g.querySelectorAll('button').forEach((b,i)=>b.onclick=()=>{S.gm=i+1;save();applyS();apply()})}});
+const LOOK=[['gb','Яркость свечения',60,160,v=>v+'%',v=>v,v=>+v],['bl','Размытие',0,60,v=>v+' px',v=>v,v=>+v],['ga','Прозрачность',0,85,v=>v+'%',v=>Math.round((1-v)*100),v=>+(1-v/100).toFixed(2)]];
+LOOK.forEach(([k,l,mn,mx])=>{const r=document.createElement('div');r.className='opt';r.dataset.r=k;
+  r.innerHTML=`<span>${l}</span><div class="rg"><input type="range" min="${mn}" max="${mx}" step="1" aria-label="${l}"><em></em></div>`;items[k]=r;
+  r.querySelector('input').addEventListener('input',e=>{S[k]=LOOK.find(x=>x[0]===k)[6](e.target.value);save();applyLook()})});
+{const r=document.createElement('div');r.className='opt';r.innerHTML='<button class="rst" id="lookRst">Сбросить вид</button>';r.style.padding='6px';items.rst=r;
+  r.querySelector('button').onclick=()=>{S.bl=DEF.bl;S.ga=null;S.gb=DEF.gb;save();applyLook()}}
+// Категории: заголовок и порядок функций внутри
+const CATS=[['Основное',['autostart','handle']],['Оформление',['theme','blur','bl','ga','sheen','rst']],['Свечение',['glow','gm','gb']],['Плашка сверху',['ticker','clockBar','secs','greet']]];
+CATS.forEach(([t,ks])=>{const h=document.createElement('h5');h.className='cat';h.textContent=t;sl.append(h);ks.forEach(k=>sl.append(items[k]))});
+const DGA={light:.82,dark:.58,black:.8};
+function applyLook(){
+  root.style.setProperty('--blur',S.bl+'px');
+  if(S.ga==null)root.style.removeProperty('--ga');else root.style.setProperty('--ga',S.ga);
+  root.classList.toggle('nosheen',!S.sheen);root.style.setProperty('--gb',S.gb/100);
+  {const gi=S.gm===2?1:0,gr=$('#gmrow');if(gr){gr.querySelectorAll('button').forEach((b,i)=>b.classList.toggle('on',i===gi));gr.querySelector('i').style.transform=`translateX(${gi*74}px)`;gr.classList.toggle('dim',!S.glow)}}
+  const ga=S.ga??(DGA[S.theme]??.58);
+  LOOK.forEach(([k,,,,fmt,toUI])=>{const r=sl.querySelector(`[data-r="${k}"]`),inp=r.querySelector('input'),v=toUI(k==='ga'?ga:S[k]);
+    if(+inp.value!==v)inp.value=v;r.querySelector('em').textContent=fmt(v);r.classList.toggle('dim',(k==='bl'&&!S.blur)||(k==='gb'&&!S.glow))})}
+let lastBlur=null;
 function applyS(){
   root.dataset.theme=S.theme;const TH=['light','dark','black'],ti=Math.max(0,TH.indexOf(S.theme));segB.forEach((b,i)=>b.classList.toggle('on',i===ti));
   $('#sind').style.transform=`translateX(${ti*74}px)`;
   root.classList.toggle('nohandle',!S.handle);
   ROWS.forEach(([k])=>{const b=sl.querySelector(`[data-k="${k}"] .sw`);b.classList.toggle('on',!!S[k]);b.setAttribute('aria-pressed',!!S[k])});
-  if(!S.glow)$('#glow').style.opacity=0;
-  invoke('set_blur',{on:!!S.blur});
+  if(!S.glow||S.gm===2)$('#glow').style.opacity=0;
+  applyLook();
+  if(lastBlur!==!!S.blur){lastBlur=!!S.blur;
+    // при включении Rust заново снимает фон, потом подтягиваем его, не дожидаясь следующего открытия
+    invoke('set_blur',{on:lastBlur}).then(()=>{if(lastBlur&&open&&!bgb.classList.contains('on'))loadBg()})}
   if(!S.blur){isl.classList.remove('bb');bgb.classList.remove('on')}
 }
 segB.forEach((b,i)=>b.onclick=()=>{S.theme=['light','dark','black'][i];save();applyS()});
@@ -578,6 +623,10 @@ const UN=[['d','дн',99],['h','час',23],['m','мин',59],['s','сек',59]]
 const tt=()=>{const t=S.tmr;return ((t.d*24+t.h)*60+t.m)*60+t.s};
 let TOT=tt(),left=TOT,timer=null,actx=null;
 const pad=n=>String(n).padStart(2,'0');
+// Сколько осталось до звонка: старшие нулевые единицы не показываем (дни, часы, минуты, секунды)
+function tmrStr(x){const d=Math.floor(x/86400),h=Math.floor(x%86400/3600),m=Math.floor(x%3600/60),sc=x%60,a=[];
+  if(d)a.push(d+'д');if(d||h)a.push((d?pad(h):h)+'ч');if(d||h||m)a.push(((d||h)?pad(m):m)+'м');a.push(((d||h||m)?pad(sc):sc)+'с');return a.join(' ')}
+const TI='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin:0 6px 0 12px;vertical-align:-2px"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg>';
 function fmtT(x){const d=Math.floor(x/86400),h=Math.floor(x%86400/3600),m=Math.floor(x%3600/60),sc=x%60;
   return d?[d+'д '+pad(h)+':'+pad(m),2]:h?[h+':'+pad(m)+':'+pad(sc),1]:[pad(m)+':'+pad(sc),0]}
 const tov=$('#tov'),pane2=document.querySelector('[data-m="2"]');
@@ -602,10 +651,21 @@ UN.forEach(([k,l,mx])=>{const d=document.createElement('div');d.className='sp';
   d._sync=sync;sync()});
 const syncAll=()=>sps.querySelectorAll('.sp').forEach(x=>x._sync());
 // звук окончания (WebAudio, без файлов)
-function beep(){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();actx.resume();const t0=actx.currentTime;
-  for(let r=0;r<3;r++)for(let i=0;i<3;i++){const o=actx.createOscillator(),g=actx.createGain(),t=t0+r*1.1+i*.2;o.type='sine';o.frequency.value=i===2?1175:880;
-    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.25,t+.02);g.gain.exponentialRampToValueAtTime(.001,t+.17);o.connect(g).connect(actx.destination);o.start(t);o.stop(t+.18)}}catch(e){}}
-function finish(){beep();note=performance.now()+8000;document.querySelectorAll('.ring').forEach(r=>{r.classList.remove('ring-ring');void r.offsetWidth;r.classList.add('ring-ring')})}
+let ringG=null,ringT=null,ringOpenStart=false;
+function stopRing(){if(ringT){clearTimeout(ringT);ringT=null}
+  if(ringG){try{ringG.gain.cancelScheduledValues(0);ringG.gain.value=0;ringG.disconnect()}catch(e){}ringG=null}
+  note=0;ringOpenStart=false}
+// звонок ровно 5 секунд: пять серий по три сигнала
+function startRing(){stopRing();
+  try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();actx.resume();const t0=actx.currentTime;
+    ringG=actx.createGain();ringG.connect(actx.destination);
+    for(let r=0;r<5;r++)for(let i=0;i<3;i++){const o=actx.createOscillator(),g=actx.createGain(),t=t0+r*1+i*.2;o.type='sine';o.frequency.value=i===2?1175:880;
+      g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.25,t+.02);g.gain.exponentialRampToValueAtTime(.001,t+.17);o.connect(g).connect(ringG);o.start(t);o.stop(t+.18)}}catch(e){}
+  ringT=setTimeout(()=>{ringT=null;ringG=null},5000)}
+function finish(){startRing();
+  ringOpenStart=open; // остров уже был открыт: звонит все 5 секунд и не прерывается
+  note=open?0:performance.now()+5000;
+  document.querySelectorAll('.ring').forEach(r=>{r.classList.remove('ring-ring');void r.offsetWidth;r.classList.add('ring-ring')})}
 function startPause(){
   try{actx=actx||new (window.AudioContext||window.webkitAudioContext)()}catch(e){}
   if(timer){clearInterval(timer);timer=null;show();return}
@@ -622,6 +682,22 @@ function openTov(){pane2.classList.add('insub');tov.classList.add('on');syncAll(
 function closeTov(){pane2.classList.remove('insub');tov.classList.remove('on');if(document.activeElement&&tov.contains(document.activeElement))document.activeElement.blur()}
 $('#ped').onclick=openTov;$('#tdone').onclick=closeTov;
 show();
+
+// Приветствия при запуске: общие и по времени суток
+const GREET=['Привет! Рады видеть тебя','Здравствуй! Пусть всё получится','Привет! Ты молодец, что ты есть','Хорошего настроения сегодня!','Рад тебя видеть!','Привет-привет! Как твои дела?','Всё будет отлично, вот увидишь','Сегодня обязательно случится что-то хорошее','Ты справишься с чем угодно','Верь в себя, у тебя всё получается','Пусть сегодня всё идёт как надо','Улыбнись, тебе это идёт','С возвращением!','Добро пожаловать обратно!','Ты делаешь мир лучше','Небольшой шаг сегодня, большой шаг завтра','Сегодня твой день','Пусть удача будет на твоей стороне','Спасибо, что ты здесь','Береги себя и отдыхай вовремя','Пусть сегодня будет немного волшебства','Ты талантлив, не забывай об этом','Пусть задачи будут лёгкими, а кофе горячим','Время творить хорошие дела','Хорошие новости уже в пути','Сегодня ты на высоте','Желаю лёгкого и приятного дня','Пусть всё задуманное сбудется','Ты заслуживаешь самого лучшего','Привет! Время для чего-то классного','Сегодня отличный день для отличных идей','Ты заряжаешь всё вокруг позитивом','Маленькие радости делают день особенным','Пусть сегодня ждут только приятные сюрпризы','Ты уже сделал много, горжусь тобой','Всё хорошее — тебе, сегодня и всегда','Твоя улыбка — лучшее украшение дня','Пусть работа будет в радость','Ты лучше, чем думаешь','Желаю вдохновения и лёгких решений'];
+const GREET_T={
+  morning:['Доброе утро! Пусть оно будет добрым','Доброе утро! Новый день, новые возможности','С добрым утром! Улыбнись солнышку','Доброе утро! Кофе уже ждёт тебя','Утро доброе! Сегодня будет хороший день','Проснись и сияй!','Доброе утро! Ты готов покорять день?','С добрым утром! Пусть день начнётся легко','Доброе утро! Всё лучшее впереди','Новое утро, новые победы'],
+  day:['Добрый день! Как проходит твой день?','Добрый день! Ты отлично справляешься','Хорошего дня! Не забудь сделать перерыв','Добрый день! Самое время выпить водички','Добрый день! Пусть всё ладится','Привет! Солнечного тебе настроения','Добрый день! Ты на правильном пути','Добрый день! Держись молодцом'],
+  evening:['Добрый вечер! Ты хорошо поработал сегодня','Добрый вечер! Самое время расслабиться','Добрый вечер! Пусть он будет уютным','Добрый вечер! Ты сегодня молодец','Добрый вечер! Отдохни, ты это заслужил','Добрый вечер! Пусть он принесёт покой и радость','Вечер добрый! Время для любимых дел','Добрый вечер! Сегодня был хороший день'],
+  night:['Доброй ночи! Не забудь немного отдохнуть','Привет, полуночник! Пусть всё получится','Ночь — время для идей. Удачи!','Не засиживайся долго, сон тоже важен','Тихой и спокойной ночи','Привет! Ночные мысли часто самые лучшие','Пусть ночь будет спокойной, а идеи яркими','Не забывай отдыхать, ты у себя один']};
+function startGreet(){
+  if(!S.greet||open)return;
+  const h=new Date().getHours(),pool=GREET_T[h>=5&&h<11?'morning':h>=11&&h<17?'day':h>=17&&h<23?'evening':'night'];
+  let last='';try{last=localStorage.getItem('glow-greet-last')||''}catch(e){}
+  const src=Math.random()<.5?pool:GREET;let m,n=0;do{m=src[Math.floor(Math.random()*src.length)];n++}while(m===last&&n<8);
+  try{localStorage.setItem('glow-greet-last',m)}catch(e){}
+  greetMsg=m;greetUntil=performance.now()+5000}
+setTimeout(startGreet,1500);
 
 // Погода и город (по IP-адресу, обновляется раз в 10 минут)
 const WC=c=>c===0?'Ясно':c<4?'Облачно':c<50?'Туман':c<70?'Дождь':c<80?'Снег':c<90?'Ливень':'Гроза';
