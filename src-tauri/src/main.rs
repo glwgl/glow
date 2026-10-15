@@ -56,10 +56,43 @@ async fn cover(key: String) -> Option<String> {
 
 // ---------- Статус ----------
 #[tauri::command]
-fn battery_info() -> Option<(f32, bool)> {
+fn battery_info() -> Option<(f32, bool, Option<f32>)> {
     let m = battery::Manager::new().ok()?;
     let b = m.batteries().ok()?.next()?.ok()?;
-    Some((b.state_of_charge().value * 100.0, b.state() == battery::State::Charging))
+    // третье число: износ, то есть какую долю заводской ёмкости батарея держит (в процентах)
+    let health = b.state_of_health().value * 100.0;
+    let health = if health.is_finite() && health > 0.0 { Some(health) } else { None };
+    Some((b.state_of_charge().value * 100.0, b.state() == battery::State::Charging, health))
+}
+
+#[derive(Serialize)]
+struct Disk { name: String, used: f64, total: f64, pct: u32 }
+#[derive(Serialize)]
+struct SysStats { cpu: Option<f32>, mem: u32, mem_used: f64, mem_total: f64, disks: Vec<Disk> }
+
+// Загрузка процессора, память и диски
+#[tauri::command]
+async fn sys_stats() -> Option<SysStats> {
+    #[cfg(windows)]
+    {
+        let (mem, mem_used, mem_total) = sys::stats::mem()?;
+        let disks = sys::stats::disks().into_iter().map(|(name, used, total)| Disk {
+            name, used, total,
+            pct: if total > 0.0 { (used / total * 100.0).round() as u32 } else { 0 },
+        }).collect();
+        Some(SysStats { cpu: sys::stats::cpu(), mem, mem_used, mem_total, disks })
+    }
+    #[cfg(not(windows))]
+    { None }
+}
+
+// Температура процессора (если Windows её показывает)
+#[tauri::command]
+async fn cpu_temp() -> Option<f32> {
+    #[cfg(windows)]
+    { sys::stats::temp() }
+    #[cfg(not(windows))]
+    { None }
 }
 
 #[tauri::command]
@@ -309,7 +342,7 @@ fn watch_cursor(app: tauri::AppHandle) {
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
-            now_playing, media_cmd, seek, cover, battery_info, radios, set_radio,
+            now_playing, media_cmd, seek, cover, battery_info, sys_stats, cpu_temp, radios, set_radio,
             get_volume, set_volume, get_brightness, set_brightness, net_names, open_settings,
             shape, set_blur, get_bg, get_autostart, set_autostart, set_open, quit
         ])
@@ -334,6 +367,13 @@ fn main() {
             if sys::autostart::get() { let _ = sys::autostart::set(true); }
 
             watch_cursor(app.handle().clone());
+
+            // Разблокировка ноутбука или пробуждение из сна: интерфейс покажет приветствие
+            #[cfg(windows)]
+            {
+                let h = app.handle().clone();
+                std::thread::spawn(move || sys::session::watch(move || { let _ = h.emit("unlocked", ()); }));
+            }
 
             // Горячая клавиша Ctrl+Alt+G: открыть или закрыть остров
             #[cfg(windows)]

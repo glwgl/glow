@@ -234,6 +234,165 @@ pub mod brightness {
     }
 }
 
+// ---------- Блокировка экрана и сон ----------
+pub mod session {
+    use std::time::{Duration, SystemTime};
+
+    #[link(name = "user32")]
+    extern "system" {
+        fn OpenInputDesktop(flags: u32, inherit: i32, access: u32) -> isize;
+        fn CloseDesktop(desk: isize) -> i32;
+    }
+
+    // Пока экран заблокирован, рабочий стол ввода недоступен, и Windows возвращает 0
+    pub fn locked() -> bool {
+        unsafe {
+            let h = OpenInputDesktop(0, 0, 0x0100); // DESKTOP_SWITCHDESKTOP
+            if h == 0 { true } else { CloseDesktop(h); false }
+        }
+    }
+
+    // Вызывает on_unlock, когда экран разблокировали
+    // или когда компьютер проснулся из сна без экрана блокировки
+    pub fn watch(on_unlock: impl Fn() + Send + 'static) {
+        let mut was_locked = locked();
+        let mut last = SystemTime::now();
+        loop {
+            std::thread::sleep(Duration::from_millis(1000));
+            let gap = SystemTime::now().duration_since(last).unwrap_or_default();
+            last = SystemTime::now();
+            let now = locked();
+            if !now && (was_locked || gap.as_secs() >= 8) { on_unlock(); }
+            was_locked = now;
+        }
+    }
+}
+
+// ---------- Система: загрузка процессора, память, диски, температура ----------
+// Вызовы kernel32 объявлены напрямую: так не нужны дополнительные возможности крейта windows.
+pub mod stats {
+    use super::*;
+    use std::time::Instant;
+
+    #[repr(C)]
+    struct MemStatus {
+        len: u32,
+        load: u32,
+        total: u64,
+        avail: u64,
+        total_page: u64,
+        avail_page: u64,
+        total_virt: u64,
+        avail_virt: u64,
+        avail_ext: u64,
+    }
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetSystemTimes(idle: *mut u64, kernel: *mut u64, user: *mut u64) -> i32;
+        fn GlobalMemoryStatusEx(buf: *mut MemStatus) -> i32;
+        fn GetLogicalDrives() -> u32;
+        fn GetDriveTypeW(root: *const u16) -> u32;
+        fn GetDiskFreeSpaceExW(dir: *const u16, avail: *mut u64, total: *mut u64, free: *mut u64) -> i32;
+        fn SetErrorMode(mode: u32) -> u32;
+    }
+
+    const GB: f64 = 1_073_741_824.0;
+
+    // Процессор: (занято, всего) на прошлый замер
+    static PREV: Mutex<Option<(u64, u64)>> = Mutex::new(None);
+
+    fn times() -> Option<(u64, u64)> {
+        let (mut idle, mut kernel, mut user) = (0u64, 0u64, 0u64);
+        if unsafe { GetSystemTimes(&mut idle, &mut kernel, &mut user) } == 0 { return None; }
+        // время ядра уже включает простой
+        Some(((kernel + user).saturating_sub(idle), kernel + user))
+    }
+
+    fn pct(a: (u64, u64), b: (u64, u64)) -> Option<f32> {
+        let busy = b.0.saturating_sub(a.0);
+        let total = b.1.saturating_sub(a.1);
+        if total == 0 { return None; }
+        Some((busy as f64 / total as f64 * 100.0).clamp(0.0, 100.0) as f32)
+    }
+
+    pub fn cpu() -> Option<f32> {
+        let now = times()?;
+        let prev = {
+            let mut g = PREV.lock().ok()?;
+            let p = *g;
+            *g = Some(now);
+            p
+        };
+        match prev {
+            Some(p) => pct(p, now),
+            None => {
+                // самый первый замер: ждём чуть-чуть, чтобы было с чем сравнивать
+                std::thread::sleep(std::time::Duration::from_millis(250));
+                let n2 = times()?;
+                if let Ok(mut g) = PREV.lock() { *g = Some(n2); }
+                pct(now, n2)
+            }
+        }
+    }
+
+    // Память: (процент, занято ГБ, всего ГБ)
+    pub fn mem() -> Option<(u32, f64, f64)> {
+        let mut m = MemStatus {
+            len: std::mem::size_of::<MemStatus>() as u32,
+            load: 0, total: 0, avail: 0, total_page: 0, avail_page: 0, total_virt: 0, avail_virt: 0, avail_ext: 0,
+        };
+        if unsafe { GlobalMemoryStatusEx(&mut m) } == 0 || m.total == 0 { return None; }
+        Some((m.load, m.total.saturating_sub(m.avail) as f64 / GB, m.total as f64 / GB))
+    }
+
+    // Диски: (имя, занято ГБ, всего ГБ). Обычные и съёмные (флешки), пустые картридеры пропускаем.
+    pub fn disks() -> Vec<(String, f64, f64)> {
+        unsafe { SetErrorMode(1); } // без окон «нет диска в устройстве»
+        let mask = unsafe { GetLogicalDrives() };
+        let mut out = Vec::new();
+        for i in 2..26u32 { // с C: (A: и B: дискеты)
+            if mask & (1u32 << i) == 0 { continue; }
+            let name = format!("{}:\\", (b'A' + i as u8) as char);
+            let root: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+            let kind = unsafe { GetDriveTypeW(root.as_ptr()) };
+            if kind != 3 && kind != 2 { continue; } // 3 жёсткий диск, 2 съёмный
+            let (mut avail, mut total, mut free) = (0u64, 0u64, 0u64);
+            if unsafe { GetDiskFreeSpaceExW(root.as_ptr(), &mut avail, &mut total, &mut free) } == 0 || total == 0 { continue; }
+            out.push((name, total.saturating_sub(free) as f64 / GB, total as f64 / GB));
+        }
+        out
+    }
+
+    // Температура: датчик тепловой зоны ACPI. Есть не на каждом компьютере, тогда вернётся None.
+    static TEMP: Mutex<(Option<Instant>, Option<f32>)> = Mutex::new((None, None));
+
+    fn read_temp() -> Option<f32> {
+        let script = "$t=(Get-CimInstance Win32_PerfFormattedData_Counters_ThermalZoneInformation -ErrorAction SilentlyContinue | Measure-Object HighPrecisionTemperature -Maximum).Maximum; \
+                      if($t){$t}else{(Get-CimInstance -Namespace root/wmi MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue | Measure-Object CurrentTemperature -Maximum).Maximum}";
+        let o = Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script])
+            .creation_flags(NO_WINDOW)
+            .output().ok()?;
+        if !o.status.success() { return None; }
+        let tenth_kelvin: f64 = String::from_utf8_lossy(&o.stdout).trim().replace(',', ".").parse().ok()?;
+        let c = tenth_kelvin / 10.0 - 273.15;
+        if (1.0..130.0).contains(&c) { Some(c as f32) } else { None }
+    }
+
+    pub fn temp() -> Option<f32> {
+        let (at, val) = *TEMP.lock().ok()?;
+        if let Some(t) = at {
+            // есть значение: не чаще раза в 4 секунды; датчика нет: пробуем снова раз в минуту
+            let ttl = if val.is_some() { 4 } else { 60 };
+            if t.elapsed().as_secs() < ttl { return val; }
+        }
+        let v = read_temp();
+        if let Ok(mut g) = TEMP.lock() { *g = (Some(Instant::now()), v); }
+        v
+    }
+}
+
 // ---------- Имена: к какому Wi-Fi и каким Bluetooth-устройствам подключён компьютер ----------
 pub mod names {
     use windows::Devices::Bluetooth::{BluetoothConnectionStatus, BluetoothDevice, BluetoothLEDevice};
